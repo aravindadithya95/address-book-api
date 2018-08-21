@@ -1,5 +1,7 @@
 import unittest
 
+import es_model
+
 # import data store
 import es_store as ds
 
