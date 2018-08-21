@@ -18,7 +18,35 @@ def list_contacts():
     (number of results allowed back), and the ability to offset by page number to get multiple pages.
     """
 
-    return "list_contacts()"
+    # get query parameters
+    try:
+        page_size = int(request.args.get('pageSize'))
+        page = int(request.args.get('page'))
+    except ValueError:
+        return make_response('Invalid query parameter(s).', 400)
+    query = request.args.get('query')
+
+    # check if page number is valid
+    if page <= 0:
+        return make_response('Invalid page number.', 400)
+
+    # read the data store
+    res = data_store.read({
+        'query_string': {
+            'default_field': 'name',
+            'query': query
+        }
+    })
+
+    # extract requested data in range
+    data = []
+    for i in range(page_size * (page - 1), page_size):
+        if (i >= len(res['hits']['hits'])):
+            break
+        data.append(res['hits']['hits'][i]['_source'])
+
+    # send response
+    return make_response(json.dumps(data), 200)
 
 
 @app.route('/contact', methods=['POST'])
@@ -40,7 +68,7 @@ def create_contact():
     # read the data store
     res = data_store.read({
         'term': {
-            '_id': data['name']
+            '_id': data['name'].lower()
         }
     })
 
@@ -49,10 +77,13 @@ def create_contact():
         return make_response('Contact name must be unique.', 400)
 
     # create new document
-    data_store.create(data)
+    success = data_store.create(data)
 
-    # send response for successful creation
-    return make_response('Contact successfully created.', 201)
+    # send response
+    if success:
+        return make_response('Contact successfully created.', 201)
+    else:
+        return make_response('Field(s) too long', 400)
 
 
 @app.route('/contact/<string:name>', methods=['GET'])
@@ -62,7 +93,7 @@ def get_contact(name):
     # read the data store
     res = data_store.read({
         'term': {
-            '_id': name
+            '_id': name.lower()
         }
     })
 
@@ -70,7 +101,7 @@ def get_contact(name):
     if res['hits']['total'] == 0:
         return make_response('Contact does not exist.', 404)
 
-    # return the result
+    # send response
     return make_response(json.dumps(res['hits']['hits'][0]['_source']), 200)
 
 
@@ -81,7 +112,7 @@ def update_contact(name):
     # read the data store
     res = data_store.read({
         'term': {
-            '_id': name
+            '_id': name.lower()
         }
     })
 
@@ -98,9 +129,13 @@ def update_contact(name):
         data['address'] = request.form['address']
     
     # update contact
-    data_store.update(name, data)
+    success = data_store.update(name, data)
 
-    return make_response('Contact succesfully updated.', 200)
+    # send response
+    if success:
+        return make_response('Contact succesfully updated.', 200)
+    else:
+        return make_response('Field(s) too long', 400)
 
 
 @app.route('/contact/<string:name>', methods=['DELETE'])
@@ -110,7 +145,7 @@ def delete_contact(name):
     # read the data store
     res = data_store.read({
         'term': {
-            '_id': name
+            '_id': name.lower()
         }
     })
 
@@ -121,6 +156,7 @@ def delete_contact(name):
     # delete contact
     data_store.delete(name)
 
+    # send response
     return make_response('Contact succesfully deleted.', 200)
 
 
